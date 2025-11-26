@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vòng quay may mắn</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    #wheelCanvas {
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      border: 6px solid #f97316;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+    .pointer {
+      width: 0; 
+      height: 0; 
+      border-left: 20px solid transparent;
+      border-right: 20px solid transparent;
+      border-bottom: 30px solid #f97316;
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-r from-yellow-100 to-orange-100 flex flex-col items-center justify-center h-screen relative">
+
+  <div class="pointer"></div>
+  <canvas id="wheelCanvas" width="300" height="300"></canvas>
+
+  <button id="spinBtn"
+        class="mt-6 bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold hover:bg-blue-800 transition">
+  Quay nào!
+</button>
+
+  
+  <p id="result" class="text-xl mt-6 font-bold text-orange-700"></p>
+
+  <script>
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1EfN-2NBLQt2sYQ6sHVkEYo76AMNAM2B6-xlIGdfykFPPuv_W31XMNkeQx9EAD7Zn/exec";
+
+
+    const canvas = document.getElementById("wheelCanvas");
+    const ctx = canvas.getContext("2d");
+    const spinBtn = document.getElementById("spinBtn");
+    const result = document.getElementById("result");
+
+    const prizes = ["Quạt", "Móc khóa", "Gối cổ","Túi tote"];
+    const arc = (2 * Math.PI) / prizes.length;
+    let angle = 0;
+    let spinning = false;
+
+    function drawWheel() {
+      for (let i = 0; i < prizes.length; i++) {
+        const start = angle + i * arc;
+        ctx.beginPath();
+        ctx.fillStyle = i % 2 === 0 ? "#f97316" : "#fb923c";
+        ctx.moveTo(150, 150);
+        ctx.arc(150, 150, 150, start, start + arc);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(150, 150);
+        ctx.rotate(start + arc / 2);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText(prizes[i], 80, 5);
+        ctx.restore();
+      }
+    }
+
+    drawWheel();
+
+    spinBtn.addEventListener("click", () => {
+      if (spinning) return;
+      spinning = true;
+      result.textContent = "";
+
+      const spinTime = 4000;
+      const spinAngle = Math.random() * 360 + 1080;
+      const start = Date.now();
+
+      function animate() {
+        const now = Date.now();
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / spinTime, 1);
+        const easing = 1 - Math.pow(1 - progress, 3);
+
+        const currentAngle = angle + spinAngle * easing;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(150, 150);
+        ctx.rotate(currentAngle * Math.PI / 180);
+        ctx.translate(-150, -150);
+        drawWheel();
+        ctx.restore();
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          angle = currentAngle % 360;
+          spinning = false;
+
+          const winningIndex = Math.floor(((360 - angle + 90) % 360) / (360 / prizes.length));
+          const prize = prizes[winningIndex];
+
+          const playerData = JSON.parse(localStorage.getItem("playerData") || "{}");
+          const playerName = playerData.fullname || "Bạn";
+
+          result.textContent = `${playerName} nhận được: ${prize}! 🎉`;
+
+          // ✅ Gửi toàn bộ dữ liệu + phần thưởng lên Google Sheet
+          fetch(GOOGLE_SCRIPT_URL, {
+            method: "POST",
+            body: new URLSearchParams({
+              fullname: playerData.fullname,
+              email: playerData.email,
+              phone: playerData.phone,
+              major: playerData.major,
+              studyPlan: playerData.studyPlan,
+              prize: prize
+            })
+          })
+            .then(res => res.text())
+            .then(txt => console.log("📩 Phản hồi:", txt))
+            .catch(err => alert("❌ Lỗi khi lưu dữ liệu: " + err.message));
+        }
+      }
+
+      animate();
+    });
+  </script>
+</body>
+</html>
